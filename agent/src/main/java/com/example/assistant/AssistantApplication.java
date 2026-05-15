@@ -16,6 +16,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.repository.ListCrudRepository;
+import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.stereotype.Controller;
@@ -69,6 +70,7 @@ class AssistantController {
 
     AssistantController(
             ToolCallbackProvider tcp,
+            JdbcClient db,
 //            DogAdoptionScheduler scheduler,
             VectorStore vectorStore,
             QuestionAnswerAdvisor questionAnswerAdvisor,
@@ -76,7 +78,7 @@ class AssistantController {
             ChatClient.Builder ai,
             PromptChatMemoryAdvisor promptChatMemoryAdvisor) {
 
-        if (false)
+        if (db.sql("select count(*) from vector_store ").query(Integer.class).single() == 0)
             repo.findAll().forEach(dog -> {
                 var dogument = new Document("id: %s, name: %s, description: %s".formatted(
                         dog.id(), dog.name(), dog.description()
