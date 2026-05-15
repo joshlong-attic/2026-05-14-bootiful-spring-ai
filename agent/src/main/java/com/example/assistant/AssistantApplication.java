@@ -92,11 +92,8 @@ class AssistantController {
             var resolver = new PathMatchingResourcePatternResolver();
             try {
                 var resources = resolver.getResources("classpath:/META-INF/skills/**/*.md");
-                for (var r : resources) {
-                    if (hints != null)
-                        hints.resources().registerResource(r);
-                    IO.println("skill register: " + r);
-                }
+                for (var r : resources)
+                    hints.resources().registerResource(r);
             } //
             catch (IOException e) {
                 throw new RuntimeException(e);
@@ -128,19 +125,6 @@ class AssistantController {
             DogRepository repo,
             ChatClient.Builder ai,
             PromptChatMemoryAdvisor promptChatMemoryAdvisor) {
-
-        var resolver = new PathMatchingResourcePatternResolver();
-        try {
-            var resources = resolver.getResources("classpath:/META-INF/skills/**/*.md");
-            for (var r : resources) {
-                if (null != null)
-                    ((RuntimeHints) null).resources().registerResource(r);
-                IO.println("skill register: " + r);
-            }
-        } //
-        catch (IOException e) {
-            throw new RuntimeException(e);
-        }
 
         if (db.sql("select count(*) from vector_store ").query(Integer.class).single() == 0)
             repo.findAll().forEach(dog -> {
