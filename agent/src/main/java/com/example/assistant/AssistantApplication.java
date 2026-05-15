@@ -1,5 +1,7 @@
 package com.example.assistant;
 
+import org.jspecify.annotations.NonNull;
+import org.jspecify.annotations.Nullable;
 import org.springaicommunity.agent.tools.SkillsTool;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.PromptChatMemoryAdvisor;
@@ -8,13 +10,20 @@ import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.ai.chat.memory.repository.jdbc.JdbcChatMemoryRepository;
 import org.springframework.ai.document.Document;
+import org.springframework.ai.ollama.api.ThinkOption;
 import org.springframework.ai.tool.ToolCallbackProvider;
 import org.springframework.ai.vectorstore.VectorStore;
+import org.springframework.aot.hint.MemberCategory;
+import org.springframework.aot.hint.RuntimeHints;
+import org.springframework.aot.hint.RuntimeHintsRegistrar;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.ImportRuntimeHints;
 import org.springframework.core.io.ClassPathResource;
+import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 import org.springframework.data.annotation.Id;
+import org.springframework.data.jdbc.core.dialect.JdbcPostgresDialect;
 import org.springframework.data.repository.ListCrudRepository;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.security.config.Customizer;
@@ -26,6 +35,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
 
 import javax.sql.DataSource;
+import java.io.IOException;
 import java.util.List;
 
 import static org.springaicommunity.mcp.security.client.sync.config.McpClientOAuth2Configurer.mcpClientOAuth2;
@@ -35,6 +45,11 @@ public class AssistantApplication {
 
     public static void main(String[] args) {
         SpringApplication.run(AssistantApplication.class, args);
+    }
+
+    @Bean
+    JdbcPostgresDialect jdbcPostgresDialect() {
+        return JdbcPostgresDialect.INSTANCE;
     }
 
     @Bean
@@ -64,7 +79,43 @@ record Dog(@Id int id, String name, String owner, String description) {
 
 @Controller
 @ResponseBody
+@ImportRuntimeHints(AssistantController.Hints.class)
 class AssistantController {
+
+    static final ClassPathResource SKILLS = new ClassPathResource("/META-INF/skills/**");
+
+    static class Hints implements RuntimeHintsRegistrar {
+
+        @Override
+        public void registerHints(@NonNull RuntimeHints hints, @Nullable ClassLoader classLoader) {
+
+            var resolver = new PathMatchingResourcePatternResolver();
+            try {
+                var resources = resolver.getResources("classpath:/META-INF/skills/**/*.md");
+                for (var r : resources) {
+                    if (hints != null)
+                        hints.resources().registerResource(r);
+                    IO.println("skill register: " + r);
+                }
+            } //
+            catch (IOException e) {
+                throw new RuntimeException(e);
+            }
+
+            // skills
+            for (var c : new Class[]{
+                    SkillsTool.SkillsInput.class,
+                    SkillsTool.SkillsFunction.class})
+                hints.reflection().registerType(c, MemberCategory.values());
+
+            // ollama
+            for (var c : new Class[]{ThinkOption.ThinkOptionDeserializer.class,
+                    ThinkOption.ThinkOptionSerializer.class}) {
+                hints.reflection().registerType(c, MemberCategory.values());
+            }
+
+        }
+    }
 
     private final ChatClient ai;
 
@@ -78,6 +129,19 @@ class AssistantController {
             ChatClient.Builder ai,
             PromptChatMemoryAdvisor promptChatMemoryAdvisor) {
 
+        var resolver = new PathMatchingResourcePatternResolver();
+        try {
+            var resources = resolver.getResources("classpath:/META-INF/skills/**/*.md");
+            for (var r : resources) {
+                if (null != null)
+                    ((RuntimeHints) null).resources().registerResource(r);
+                IO.println("skill register: " + r);
+            }
+        } //
+        catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+
         if (db.sql("select count(*) from vector_store ").query(Integer.class).single() == 0)
             repo.findAll().forEach(dog -> {
                 var dogument = new Document("id: %s, name: %s, description: %s".formatted(
@@ -88,7 +152,7 @@ class AssistantController {
 
         var st = SkillsTool
                 .builder()
-                .addSkillsResource(new ClassPathResource("/META-INF/skills"))
+                .addSkillsResource(SKILLS)
                 .build();
         this.ai = ai
                 .defaultToolCallbacks(tcp)
